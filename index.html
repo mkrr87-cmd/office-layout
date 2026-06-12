@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사무실 레이아웃 편집기</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#12121f;color:#dde;display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:13px}
+
+/* ── top bar ── */
+#topbar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#1a1a2e;border-bottom:1px solid #2a2a4a;flex-shrink:0;flex-wrap:wrap}
+#topbar h1{font-size:14px;font-weight:700;color:#e94560;margin-right:4px;white-space:nowrap}
+.tb-btn{background:#252545;border:1px solid #3a3a6a;color:#aac;padding:5px 9px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;transition:background .12s;white-space:nowrap;line-height:1}
+.tb-btn:hover{background:#333366}
+.tb-btn.active-toggle{background:#e94560;border-color:#ff6b6b;color:#fff}
+.tb-btn.warn{border-color:#5a2020;color:#f88}
+.tb-btn.warn:hover{background:#4a1515}
+.tb-sep{width:1px;height:22px;background:#2a2a4a;margin:0 2px;flex-shrink:0}
+#api-key-badge{background:#1a3a1a;border:1px solid #2a5a2a;color:#6f6;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px}
+#api-key-badge.missing{background:#3a1a1a;border-color:#5a2a2a;color:#f88}
+
+/* ── workspace ── */
+#workspace{display:flex;flex:1;overflow:hidden}
+
+/* ── sidebar ── */
+#sidebar{width:190px;flex-shrink:0;background:#1a1a2e;border-right:1px solid #2a2a4a;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.sb-section{padding:7px;border-bottom:1px solid #2a2a4a}
+.sb-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#556688;margin-bottom:5px;padding:1px 3px}
+.tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.tool-btn{background:#252545;border:1px solid #3a3a6a;color:#aac;padding:6px 4px;border-radius:5px;cursor:pointer;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all .12s;line-height:1.2}
+.tool-btn:hover{background:#333366}
+.tool-btn.active{background:#e94560;border-color:#ff6b6b;color:#fff}
+.tool-btn i{font-size:17px}
+.tool-hint{font-size:10px;color:#446688;padding:3px 5px;line-height:1.4;background:#1a2030;border-radius:4px;margin-top:3px}
+
+.fur-item{background:#252545;border:1px solid #3a3a6a;color:#aac;padding:5px 7px;border-radius:5px;cursor:grab;font-size:11px;display:flex;align-items:center;gap:6px;margin-bottom:3px;transition:background .12s;user-select:none}
+.fur-item:hover{background:#333366}
+.fur-item:active{cursor:grabbing}
+.fur-item i{font-size:15px;flex-shrink:0}
+
+/* ── property panel ── */
+#prop-panel{flex:1;padding:7px;overflow-y:auto}
+.prop-group{margin-bottom:10px}
+.prop-group-title{font-size:10px;font-weight:700;text-transform:uppercase;color:#446688;margin-bottom:5px}
+.prop-row{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.prop-label{font-size:11px;color:#667799;width:44px;flex-shrink:0}
+.prop-input{flex:1;min-width:0;background:#1e1e36;border:1px solid #3a3a6a;color:#dde;padding:3px 6px;border-radius:4px;font-size:12px}
+.prop-input:focus{outline:none;border-color:#e94560}
+.color-row{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.cswatch{width:18px;height:18px;border-radius:3px;cursor:pointer;border:2px solid transparent;transition:border-color .1s;flex-shrink:0}
+.cswatch.sel{border-color:#fff}
+.del-btn{width:100%;background:#3a1010;border:1px solid #6a2020;color:#f88;padding:5px;border-radius:5px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px;margin-top:6px}
+.del-btn:hover{background:#5a1515}
+.no-sel{color:#446688;font-size:12px;padding:10px 0;text-align:center}
+
+/* ── canvas ── */
+#canvas-area{flex:1;position:relative;overflow:hidden;background:#0a0a18}
+canvas{display:block;cursor:crosshair}
+#hud-coords{position:absolute;bottom:8px;left:8px;font-size:11px;color:#335566;pointer-events:none}
+#hud-zoom{position:absolute;bottom:8px;right:8px;font-size:11px;color:#335566;pointer-events:none}
+#hud-hint{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#557799;background:rgba(10,10,24,.8);padding:4px 12px;border-radius:10px;pointer-events:none;white-space:nowrap}
+#hud-hint:empty{display:none}
+
+/* ── loading overlay ── */
+#loading-overlay{display:none;position:absolute;inset:0;background:rgba(10,10,24,.85);z-index:50;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#loading-overlay.show{display:flex}
+.spinner{width:40px;height:40px;border:3px solid #2a2a4a;border-top-color:#e94560;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-msg{color:#aac;font-size:14px;text-align:center;max-width:280px;line-height:1.5}
+
+/* ── modals ── */
+#modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+#modal-bg.open{display:flex}
+.modal{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:20px;min-width:320px;max-width:500px;max-height:85vh;overflow-y:auto}
+.modal h2{font-size:15px;font-weight:700;margin-bottom:14px;color:#dde;display:flex;align-items:center;gap:7px}
+.modal-input{width:100%;background:#1e1e36;border:1px solid #3a3a6a;color:#dde;padding:7px 10px;border-radius:6px;font-size:13px;margin-bottom:8px}
+.modal-input:focus{outline:none;border-color:#e94560}
+.modal-note{font-size:11px;color:#557799;margin-bottom:10px;line-height:1.5}
+.modal-btns{display:flex;gap:7px;justify-content:flex-end;margin-top:8px}
+.mbtn{background:#252545;border:1px solid #3a3a6a;color:#aac;padding:6px 16px;border-radius:5px;cursor:pointer;font-size:13px}
+.mbtn.primary{background:#e94560;border-color:#ff6b6b;color:#fff}
+.mbtn:hover{opacity:.85}
+.save-item{background:#1e1e36;border:1px solid #2a2a4a;border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+.si-name{font-weight:600;color:#dde;font-size:13px}
+.si-date{color:#556688;font-size:11px;margin-top:1px}
+.si-btns{display:flex;gap:4px}
+.si-btn{background:#252545;border:1px solid #3a3a6a;color:#aac;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px}
+.si-btn.del{border-color:#5a1a1a;color:#f88}
+.si-btn:hover{opacity:.8}
+
+/* ── analysis result panel ── */
+#analysis-bar{display:none;background:#1a2a1a;border-bottom:1px solid #2a4a2a;padding:6px 12px;font-size:12px;color:#8f8;align-items:center;gap:8px;flex-shrink:0}
+#analysis-bar.show{display:flex}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1><i class="ti ti-building"></i> 사무실 레이아웃</h1>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-upload"><i class="ti ti-photo-scan"></i> 도면 업로드 + 분석</button>
+  <input type="file" id="file-input" accept="image/*" style="display:none">
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-save"><i class="ti ti-device-floppy"></i> 저장</button>
+  <button class="tb-btn" id="btn-load"><i class="ti ti-folder-open"></i> 불러오기</button>
+  <button class="tb-btn" id="btn-export"><i class="ti ti-download"></i> PNG</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-undo"><i class="ti ti-arrow-back-up"></i> 실행취소</button>
+  <button class="tb-btn" id="btn-redo"><i class="ti ti-arrow-forward-up"></i> 다시실행</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-grid" title="격자 표시"><i class="ti ti-grid-dots"></i></button>
+  <button class="tb-btn" id="btn-snap" title="격자 스냅"><i class="ti ti-magnet"></i> 스냅ON</button>
+  <button class="tb-btn" id="btn-bg-toggle" title="배경도면 표시"><i class="ti ti-eye"></i> 배경</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn warn" id="btn-clear"><i class="ti ti-trash"></i> 전체삭제</button>
+  <div style="margin-left:auto"></div>
+  <div id="api-key-badge" class="missing" title="Claude API 키 설정"><i class="ti ti-key"></i> API키 설정</div>
+</div>
+
+<div id="analysis-bar">
+  <i class="ti ti-check"></i>
+  <span id="analysis-msg">도면 분석 완료</span>
+  <button class="tb-btn" id="btn-reanalyze" style="margin-left:auto"><i class="ti ti-refresh"></i> 재분석</button>
+</div>
+
+<div id="workspace">
+  <div id="sidebar">
+    <div class="sb-section">
+      <div class="sb-title">도구</div>
+      <div class="tool-grid">
+        <button class="tool-btn active" data-tool="select"><i class="ti ti-pointer"></i><span>선택</span></button>
+        <button class="tool-btn" data-tool="pan"><i class="ti ti-hand-move"></i><span>이동</span></button>
+        <button class="tool-btn" data-tool="wall"><i class="ti ti-minus"></i><span>벽 그리기</span></button>
+        <button class="tool-btn" data-tool="room"><i class="ti ti-square"></i><span>공간</span></button>
+        <button class="tool-btn" data-tool="door"><i class="ti ti-door"></i><span>문</span></button>
+        <button class="tool-btn" data-tool="window-t"><i class="ti ti-border-bottom"></i><span>창문</span></button>
+        <button class="tool-btn" data-tool="text"><i class="ti ti-text-size"></i><span>텍스트</span></button>
+        <button class="tool-btn" data-tool="measure"><i class="ti ti-ruler"></i><span>치수</span></button>
+      </div>
+      <div id="tool-hint" class="tool-hint" style="margin-top:5px">클릭으로 요소 선택</div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-title">가구 드래그</div>
+      <div class="fur-item" draggable="true" data-ftype="desk-single"><i class="ti ti-table"></i>책상 1인</div>
+      <div class="fur-item" draggable="true" data-ftype="desk-double"><i class="ti ti-layout-columns"></i>책상 2인</div>
+      <div class="fur-item" draggable="true" data-ftype="desk-l"><i class="ti ti-layout-navbar"></i>L형 책상</div>
+      <div class="fur-item" draggable="true" data-ftype="chair"><i class="ti ti-armchair"></i>의자</div>
+      <div class="fur-item" draggable="true" data-ftype="sofa"><i class="ti ti-sofa"></i>소파</div>
+      <div class="fur-item" draggable="true" data-ftype="table-meet"><i class="ti ti-rectangle"></i>회의 테이블</div>
+      <div class="fur-item" draggable="true" data-ftype="table-round"><i class="ti ti-circle"></i>원형 테이블</div>
+      <div class="fur-item" draggable="true" data-ftype="cabinet"><i class="ti ti-file-cabinet"></i>캐비닛</div>
+      <div class="fur-item" draggable="true" data-ftype="bookshelf"><i class="ti ti-books"></i>책장</div>
+      <div class="fur-item" draggable="true" data-ftype="plant"><i class="ti ti-leaf"></i>화분</div>
+      <div class="fur-item" draggable="true" data-ftype="monitor"><i class="ti ti-device-desktop"></i>모니터</div>
+      <div class="fur-item" draggable="true" data-ftype="printer"><i class="ti ti-printer"></i>프린터</div>
+    </div>
+
+    <div id="prop-panel">
+      <div class="no-sel">요소를 선택하면<br>속성이 표시됩니다</div>
+    </div>
+  </div>
+
+  <div id="canvas-area">
+    <canvas id="cvs"></canvas>
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <div id="loading-msg">Claude AI가 도면을 분석하고 있습니다...<br>잠시만 기다려 주세요</div>
+    </div>
+    <div id="hud-coords">X:0 Y:0</div>
+    <div id="hud-zoom">100%</div>
+    <div id="hud-hint"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal-bg">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const area = document.getElementById('canvas-area');
+
+const S = {
+  tool: 'select',
+  zoom: 1, panX: 80, panY: 80,
+  showGrid: true, snapOn: true, showBg: true,
+  gridSize: 20,
+  objs: [],          // all drawn objects
+  sel: null,         // selected object (id)
+  bgImg: null, bgSrc: null,
+  history: [], hIdx: -1,
+  // drawing state
+  isDown: false, downWx: 0, downWy: 0,
+  curWx: 0, curWy: 0,
+  wallPts: [],       // wall polyline points
+  measures: [],      // [{x1,y1,x2,y2}]
+  pendingMeas: null,
+  // drag
+  dragId: null, dragDx: 0, dragDy: 0,
+  isPan: false, panSx: 0, panSy: 0,
+  // resize
+  isResize: false, resizeHandle: null, resizeSnap: null,
+  apiKey: localStorage.getItem('claude-api-key') || '',
+};
+
+const TOOL_HINTS = {
+  select:'클릭: 선택 | 드래그: 이동 | Delete: 삭제',
+  pan:'드래그로 화면 이동 | 휠: 줌',
+  wall:'클릭: 점 추가 | 더블클릭: 완성 | ESC: 취소',
+  room:'드래그로 공간 영역 그리기',
+  door:'드래그로 문 그리기',
+  'window-t':'드래그로 창문 그리기',
+  text:'클릭 후 텍스트 입력',
+  measure:'클릭: 시작점 | 다시 클릭: 끝점 | ESC: 취소',
+};
+
+const FUR_SIZE = {
+  'desk-single':[120,70],'desk-double':[240,70],'desk-l':[130,130],
+  'chair':[55,55],'sofa':[170,75],'table-meet':[220,100],
+  'table-round':[90,90],'cabinet':[80,45],'bookshelf':[130,38],
+  'plant':[45,45],'monitor':[65,32],'printer':[72,55],
+};
+
+const FUR_COLOR = {
+  'desk-single':'#4a8fc0','desk-double':'#4a8fc0','desk-l':'#4a8fc0',
+  'chair':'#c07840','sofa':'#9060b0','table-meet':'#40a080',
+  'table-round':'#40a080','cabinet':'#a08050','bookshelf':'#806040',
+  'plant':'#40a040','monitor':'#5080a0','printer':'#7080a0',
+};
+
+const FUR_LABEL = {
+  'desk-single':'책상','desk-double':'2인책상','desk-l':'L책상',
+  'chair':'의자','sofa':'소파','table-meet':'회의테이블',
+  'table-round':'원형테이블','cabinet':'캐비닛','bookshelf':'책장',
+  'plant':'화분','monitor':'모니터','printer':'프린터',
+};
+
+// ═══════════════════════════════════════════════
+// CANVAS RESIZE
+// ═══════════════════════════════════════════════
+function resize() { cvs.width = area.clientWidth; cvs.height = area.clientHeight; render(); }
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════
+// COORD TRANSFORMS
+// ═══════════════════════════════════════════════
+function s2w(sx,sy){ return {x:(sx-S.panX)/S.zoom, y:(sy-S.panY)/S.zoom}; }
+function w2s(wx,wy){ return {x:wx*S.zoom+S.panX, y:wy*S.zoom+S.panY}; }
+function snap(v){ return S.snapOn ? Math.round(v/S.gridSize)*S.gridSize : v; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+// ═══════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════
+function saveHist(){
+  const snap = JSON.stringify({objs:S.objs, bgSrc:S.bgSrc, measures:S.measures});
+  S.history = S.history.slice(0, S.hIdx+1);
+  S.history.push(snap);
+  if(S.history.length>60) S.history.shift();
+  S.hIdx = S.history.length-1;
+}
+function undo(){ if(S.hIdx<=0) return; S.hIdx--; restoreHist(S.history[S.hIdx]); }
+function redo(){ if(S.hIdx>=S.history.length-1) return; S.hIdx++; restoreHist(S.history[S.hIdx]); }
+function restoreHist(snap){
+  const d = JSON.parse(snap);
+  S.objs = d.objs; S.measures = d.measures||[];
+  if(d.bgSrc && d.bgSrc!==S.bgSrc) loadBg(d.bgSrc);
+  else if(!d.bgSrc){ S.bgImg=null; S.bgSrc=null; }
+  S.sel=null; renderProp(); render();
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function render(){
+  const W=cvs.width, H=cvs.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0a0a18'; ctx.fillRect(0,0,W,H);
+
+  // grid
+  if(S.showGrid){
+    const gs=S.gridSize*S.zoom;
+    const ox=((S.panX%gs)+gs)%gs, oy=((S.panY%gs)+gs)%gs;
+    ctx.strokeStyle='rgba(255,255,255,0.035)'; ctx.lineWidth=.5;
+    for(let x=ox;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=oy;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    const gb=gs*5, ob=((S.panX%gb)+gb)%gb, ob2=((S.panY%gb)+gb)%gb;
+    ctx.strokeStyle='rgba(255,255,255,0.07)';
+    for(let x=ob;x<W;x+=gb){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=ob2;y<H;y+=gb){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  }
+
+  // bg image
+  if(S.bgImg && S.showBg){
+    ctx.save(); ctx.globalAlpha=.35;
+    ctx.drawImage(S.bgImg, S.panX, S.panY, S.bgImg.width*S.zoom, S.bgImg.height*S.zoom);
+    ctx.restore();
+  }
+
+  // objects
+  S.objs.forEach(o => drawObj(o));
+
+  // wall in-progress
+  if(S.tool==='wall' && S.wallPts.length>0){
+    ctx.save();
+    ctx.strokeStyle='#8899bb'; ctx.lineWidth=8*S.zoom; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.globalAlpha=.7;
+    ctx.beginPath();
+    const p0=w2s(S.wallPts[0].x,S.wallPts[0].y); ctx.moveTo(p0.x,p0.y);
+    S.wallPts.slice(1).forEach(p=>{ const s=w2s(p.x,p.y); ctx.lineTo(s.x,s.y); });
+    const cur=w2s(S.curWx,S.curWy); ctx.lineTo(cur.x,cur.y);
+    ctx.stroke();
+    // dots
+    S.wallPts.forEach(p=>{ const s=w2s(p.x,p.y); ctx.fillStyle='#e94560'; ctx.beginPath(); ctx.arc(s.x,s.y,4,0,Math.PI*2); ctx.fill(); });
+    ctx.restore();
+  }
+
+  // room/door/window in-progress drag
+  if(S.isDown && ['room','door','window-t'].includes(S.tool)){
+    const a=w2s(S.downWx,S.downWy);
+    const bx=S.curWx*S.zoom+S.panX, by=S.curWy*S.zoom+S.panY;
+    ctx.save(); ctx.strokeStyle='#e94560'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.strokeRect(a.x, a.y, bx-a.x, by-a.y);
+    ctx.setLineDash([]); ctx.restore();
+  }
+
+  // measure in-progress
+  if(S.tool==='measure' && S.pendingMeas){
+    const a=w2s(S.pendingMeas.x,S.pendingMeas.y), b=w2s(S.curWx,S.curWy);
+    const dx=S.curWx-S.pendingMeas.x, dy=S.curWy-S.pendingMeas.y;
+    const dist=Math.round(Math.sqrt(dx*dx+dy*dy));
+    ctx.save(); ctx.strokeStyle='#ffff55'; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#ffff55'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(dist+'px', (a.x+b.x)/2, (a.y+b.y)/2-8);
+    ctx.restore();
+  }
+
+  // saved measures
+  S.measures.forEach(m=>{
+    const a=w2s(m.x1,m.y1), b=w2s(m.x2,m.y2);
+    const dx=m.x2-m.x1, dy=m.y2-m.y1;
+    const dist=Math.round(Math.sqrt(dx*dx+dy*dy));
+    ctx.save(); ctx.strokeStyle='rgba(255,255,80,.5)'; ctx.lineWidth=1; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(255,255,80,.8)'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(dist+'px', (a.x+b.x)/2, (a.y+b.y)/2-7);
+    ctx.restore();
+  });
+}
+
+// ─── draw single object ───
+function drawObj(o){
+  ctx.save();
+  const sel = S.sel === o.id;
+
+  if(o.type==='wall'){
+    const a=w2s(o.x1,o.y1), b=w2s(o.x2,o.y2);
+    ctx.strokeStyle = o.color||'#8899bb';
+    ctx.lineWidth = (o.thick||8)*S.zoom;
+    ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    if(sel){ ctx.strokeStyle='#e94560'; ctx.lineWidth=2; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  else if(o.type==='room'){
+    const {sx,sy,sw,sh}=objScreen(o);
+    ctx.fillStyle = o.color||'rgba(90,140,220,0.12)';
+    ctx.strokeStyle = o.color ? o.color+'99' : 'rgba(90,140,220,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.rect(sx,sy,sw,sh); ctx.fill(); ctx.stroke();
+    if(o.label){
+      ctx.fillStyle='rgba(140,190,255,0.9)';
+      ctx.font=`${Math.max(9,13*S.zoom)}px sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(o.label, sx+sw/2, sy+sh/2);
+    }
+    if(sel) drawSelBox(sx,sy,sw,sh);
+  }
+  else if(o.type==='door'){
+    const {sx,sy,sw}=objScreen(o);
+    const angle=(o.rotation||0)*Math.PI/180;
+    ctx.translate(sx,sy); ctx.rotate(angle);
+    ctx.strokeStyle=o.color||'#ffaa44'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(sw,0); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,sw,0,Math.PI/2); ctx.stroke();
+    if(sel){ ctx.strokeStyle='#e94560'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.strokeRect(-4,-4,sw+8,sw+8); ctx.setLineDash([]); }
+  }
+  else if(o.type==='window-t'){
+    const {sx,sy,sw,sh}=objScreen(o);
+    ctx.strokeStyle=o.color||'#44aaff'; ctx.lineWidth=3*S.zoom;
+    ctx.beginPath(); ctx.rect(sx, sy+sh*.3, sw, sh*.4); ctx.stroke();
+    ctx.lineWidth=1; ctx.setLineDash([4*S.zoom,3*S.zoom]);
+    ctx.beginPath(); ctx.moveTo(sx,sy+sh*.5); ctx.lineTo(sx+sw,sy+sh*.5); ctx.stroke();
+    ctx.setLineDash([]);
+    if(sel) drawSelBox(sx,sy,sw,sh);
+  }
+  else if(o.type==='text'){
+    const {sx,sy}=objScreen(o);
+    ctx.fillStyle=o.color||'#ffffff';
+    ctx.font=`${(o.fontSize||14)*S.zoom}px sans-serif`;
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(o.text||'텍스트', sx, sy);
+    if(sel){
+      const m=ctx.measureText(o.text||'텍스트');
+      const fw=m.width, fh=(o.fontSize||14)*S.zoom;
+      ctx.strokeStyle='#e94560'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+      ctx.strokeRect(sx-3,sy-3,fw+6,fh+6); ctx.setLineDash([]);
+    }
+  }
+  else {
+    drawFurniture(o, sel);
+  }
+  ctx.restore();
+}
+
+function objScreen(o){
+  const s=w2s(o.x,o.y);
+  return {sx:s.x, sy:s.y, sw:(o.w||0)*S.zoom, sh:(o.h||0)*S.zoom};
+}
+
+function drawSelBox(sx,sy,sw,sh){
+  ctx.strokeStyle='#e94560'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+  ctx.strokeRect(sx-3,sy-3,sw+6,sh+6); ctx.setLineDash([]);
+  // handles
+  const hs=[[0,0],[sw/2,0],[sw,0],[sw,sh/2],[sw,sh],[sw/2,sh],[0,sh],[0,sh/2]];
+  hs.forEach(([hx,hy])=>{ ctx.fillStyle='#fff'; ctx.strokeStyle='#e94560'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.rect(sx+hx-4,sy+hy-4,8,8); ctx.fill(); ctx.stroke(); });
+}
+
+function drawFurniture(o, sel){
+  const {sx,sy,sw,sh}=objScreen(o);
+  const color = o.color || FUR_COLOR[o.type] || '#6688aa';
+  ctx.save();
+  ctx.translate(sx+sw/2, sy+sh/2);
+  if(o.rotation) ctx.rotate(o.rotation*Math.PI/180);
+  ctx.translate(-sw/2,-sh/2);
+
+  ctx.fillStyle=color+'28'; ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  const isCircle = o.type==='chair'||o.type==='table-round'||o.type==='plant';
+  if(isCircle){
+    ctx.beginPath(); ctx.ellipse(sw/2,sh/2,sw/2,sh/2,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.roundRect(0,0,sw,sh,3); ctx.fill(); ctx.stroke();
+  }
+  // desk detail lines
+  if(o.type==='desk-single'||o.type==='desk-double'){
+    ctx.strokeStyle=color+'88'; ctx.lineWidth=.8;
+    ctx.beginPath(); ctx.moveTo(0,sh*.8); ctx.lineTo(sw,sh*.8); ctx.stroke();
+  }
+  if(o.type==='desk-l'){
+    ctx.strokeStyle=color+'88'; ctx.lineWidth=.8;
+    ctx.beginPath(); ctx.moveTo(sw*.5,0); ctx.lineTo(sw*.5,sh*.5); ctx.lineTo(sw,sh*.5); ctx.stroke();
+  }
+  if(o.type==='chair'){
+    ctx.fillStyle=color+'55'; ctx.strokeStyle=color; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(sw/2,sh/2,sw/2*.6,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(sw*.2,-sh*.18,sw*.6,sh*.25); ctx.fill(); ctx.stroke();
+  }
+
+  const label = o.label || FUR_LABEL[o.type] || o.type;
+  const fs = Math.max(7, Math.min(11, sw/7)) * S.zoom;
+  if(fs>5){
+    ctx.fillStyle=color; ctx.font=`${fs}px sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(label, sw/2, sh/2);
+  }
+  if(sel){ ctx.strokeStyle='#e94560'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.strokeRect(-3,-3,sw+6,sh+6); ctx.setLineDash([]); }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════
+// HIT TESTING
+// ═══════════════════════════════════════════════
+function dist2seg(px,py,ax,ay,bx,by){
+  const dx=bx-ax, dy=by-ay, len2=dx*dx+dy*dy;
+  if(len2===0) return Math.hypot(px-ax,py-ay);
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len2));
+  return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
+}
+
+function hitObj(o, wx, wy){
+  const margin=8/S.zoom;
+  if(o.type==='wall'){
+    return dist2seg(wx,wy,o.x1,o.y1,o.x2,o.y2) < (o.thick||8)/2/S.zoom + margin;
+  }
+  if(o.type==='door'){
+    return wx>=o.x-margin && wx<=o.x+o.w+margin && wy>=o.y-margin && wy<=o.y+o.w+margin;
+  }
+  if(o.type==='text'){
+    return wx>=o.x-margin && wx<=o.x+100 && wy>=o.y-margin && wy<=o.y+20;
+  }
+  return wx>=o.x-margin && wx<=o.x+o.w+margin && wy>=o.y-margin && wy<=o.y+o.h+margin;
+}
+
+function getHandleAt(o, wx, wy){
+  if(!o.x&&o.type!=='wall') return null;
+  if(o.type==='wall') return null;
+  const hw=7/S.zoom;
+  const hs=[
+    {id:'nw',x:o.x,y:o.y},{id:'n',x:o.x+o.w/2,y:o.y},{id:'ne',x:o.x+o.w,y:o.y},
+    {id:'e',x:o.x+o.w,y:o.y+o.h/2},{id:'se',x:o.x+o.w,y:o.y+o.h},
+    {id:'s',x:o.x+o.w/2,y:o.y+o.h},{id:'sw',x:o.x,y:o.y+o.h},{id:'w',x:o.x,y:o.y+o.h/2}
+  ];
+  for(const h of hs) if(Math.abs(wx-h.x)<hw&&Math.abs(wy-h.y)<hw) return h.id;
+  return null;
+}
+
+function getObjById(id){ return S.objs.find(o=>o.id===id); }
+
+// ═══════════════════════════════════════════════
+// MOUSE EVENTS
+// ═══════════════════════════════════════════════
+cvs.addEventListener('mousedown', e=>{
+  if(e.button===1 || (e.button===0&&e.altKey)){
+    S.isPan=true; S.panSx=e.clientX-S.panX; S.panSy=e.clientY-S.panY;
+    cvs.style.cursor='grabbing'; return;
+  }
+  if(e.button!==0) return;
+  const r=cvs.getBoundingClientRect();
+  const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  const {x:wx,y:wy}=s2w(sx,sy);
+  const swx=snap(wx), swy=snap(wy);
+  S.curWx=wx; S.curWy=wy;
+
+  if(S.tool==='pan'){
+    S.isPan=true; S.panSx=e.clientX-S.panX; S.panSy=e.clientY-S.panY;
+    cvs.style.cursor='grabbing'; return;
+  }
+
+  if(S.tool==='wall'){
+    if(S.wallPts.length===0) S.wallPts=[{x:swx,y:swy}];
+    else S.wallPts.push({x:swx,y:swy});
+    render(); return;
+  }
+
+  if(S.tool==='measure'){
+    if(!S.pendingMeas){ S.pendingMeas={x:swx,y:swy}; }
+    else {
+      S.measures.push({x1:S.pendingMeas.x,y1:S.pendingMeas.y,x2:swx,y2:swy});
+      S.pendingMeas=null; saveHist();
+    }
+    render(); return;
+  }
+
+  if(S.tool==='text'){
+    const text=prompt('텍스트를 입력하세요:','공간 이름');
+    if(text){
+      S.objs.push({id:uid(),type:'text',x:swx,y:swy,w:100,h:16,text,fontSize:14,color:'#ffffff',rotation:0});
+      saveHist(); render();
+    }
+    return;
+  }
+
+  if(['room','door','window-t'].includes(S.tool)){
+    S.isDown=true; S.downWx=swx; S.downWy=swy; return;
+  }
+
+  if(S.tool==='select'){
+    const selObj = getObjById(S.sel);
+    // check handle first
+    if(selObj && selObj.type!=='wall'){
+      const h=getHandleAt(selObj,wx,wy);
+      if(h){
+        S.isResize=true; S.resizeHandle=h;
+        S.resizeSnap={x:wx,y:wy,ox:selObj.x,oy:selObj.y,ow:selObj.w,oh:selObj.h};
+        return;
+      }
+    }
+    // find object
+    let found=null;
+    for(let i=S.objs.length-1;i>=0;i--){ if(hitObj(S.objs[i],wx,wy)){found=S.objs[i];break;} }
+    if(found){
+      S.sel=found.id;
+      S.dragId=found.id;
+      if(found.type==='wall'){ S.dragDx=0; S.dragDy=0; S.wallDrag={x1:found.x1,y1:found.y1,x2:found.x2,y2:found.y2,mx:wx,my:wy}; }
+      else { S.dragDx=wx-found.x; S.dragDy=wy-found.y; }
+    } else { S.sel=null; }
+    renderProp(); render();
+  }
+});
+
+cvs.addEventListener('mousemove', e=>{
+  const r=cvs.getBoundingClientRect();
+  const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  const {x:wx,y:wy}=s2w(sx,sy);
+  S.curWx=snap(wx); S.curWy=snap(wy);
+  document.getElementById('hud-coords').textContent=`X:${Math.round(wx)} Y:${Math.round(wy)}`;
+
+  if(S.isPan){
+    S.panX=e.clientX-S.panSx; S.panY=e.clientY-S.panSy;
+    render(); return;
+  }
+  if(S.isResize){
+    const o=getObjById(S.sel); if(!o) return;
+    const {x:rx,y:ry}=s2w(sx,sy);
+    const dx=snap(rx)-snap(S.resizeSnap.x), dy=snap(ry)-snap(S.resizeSnap.y);
+    const h=S.resizeHandle;
+    if(h.includes('e')) o.w=Math.max(10,S.resizeSnap.ow+dx);
+    if(h.includes('s')) o.h=Math.max(10,S.resizeSnap.oh+dy);
+    if(h.includes('w')){ o.x=S.resizeSnap.ox+dx; o.w=Math.max(10,S.resizeSnap.ow-dx); }
+    if(h.includes('n')){ o.y=S.resizeSnap.oy+dy; o.h=Math.max(10,S.resizeSnap.oh-dy); }
+    render(); return;
+  }
+  if(S.dragId){
+    const o=getObjById(S.dragId); if(!o) return;
+    if(o.type==='wall'){
+      const wd=S.wallDrag;
+      const ddx=snap(wx)-snap(wd.mx), ddy=snap(wy)-snap(wd.my);
+      o.x1=wd.x1+ddx; o.y1=wd.y1+ddy; o.x2=wd.x2+ddx; o.y2=wd.y2+ddy;
+    } else {
+      o.x=snap(wx-S.dragDx); o.y=snap(wy-S.dragDy);
+    }
+    render(); return;
+  }
+  render();
+});
+
+cvs.addEventListener('mouseup', e=>{
+  if(S.isPan){ S.isPan=false; cvs.style.cursor=S.tool==='pan'?'grab':'crosshair'; return; }
+  if(S.isResize){ S.isResize=false; saveHist(); render(); return; }
+  if(S.dragId){ S.dragId=null; S.wallDrag=null; saveHist(); render(); return; }
+
+  if(S.isDown && ['room','door','window-t'].includes(S.tool)){
+    S.isDown=false;
+    const r=cvs.getBoundingClientRect();
+    const {x:wx,y:wy}=s2w(e.clientX-r.left, e.clientY-r.top);
+    const x=Math.min(S.downWx,snap(wx)), y=Math.min(S.downWy,snap(wy));
+    const w=Math.abs(snap(wx)-S.downWx), h=Math.abs(snap(wy)-S.downWy);
+    if(w>5&&h>5){
+      const o={id:uid(),type:S.tool,x,y,w,h,rotation:0,color:null};
+      if(S.tool==='room') o.label='공간';
+      if(S.tool==='door'){ o.h=w; } // door arc size = width
+      S.objs.push(o); S.sel=o.id; renderProp(); saveHist();
+    }
+    render();
+  }
+});
+
+cvs.addEventListener('dblclick', e=>{
+  if(S.tool==='wall' && S.wallPts.length>=2){
+    commitWall(); return;
+  }
+  // double click to rename room/text
+  if(S.tool==='select' && S.sel){
+    const o=getObjById(S.sel);
+    if(o&&(o.type==='room'||o.type==='text')){
+      const key=o.type==='text'?'text':'label';
+      const val=prompt('이름:', o[key]||'');
+      if(val!==null){ o[key]=val; saveHist(); render(); renderProp(); }
+    }
+  }
+});
+
+function commitWall(){
+  for(let i=0;i<S.wallPts.length-1;i++){
+    const a=S.wallPts[i], b=S.wallPts[i+1];
+    S.objs.push({id:uid(),type:'wall',x1:a.x,y1:a.y,x2:b.x,y2:b.y,thick:8,color:'#8899bb'});
+  }
+  S.wallPts=[]; saveHist(); render();
+}
+
+cvs.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const r=cvs.getBoundingClientRect();
+  const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  const f=e.deltaY<0?1.12:.89;
+  const nz=Math.max(.08,Math.min(8,S.zoom*f));
+  S.panX=sx-(sx-S.panX)*(nz/S.zoom);
+  S.panY=sy-(sy-S.panY)*(nz/S.zoom);
+  S.zoom=nz;
+  document.getElementById('hud-zoom').textContent=Math.round(S.zoom*100)+'%';
+  render();
+},{passive:false});
+
+cvs.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  if(S.tool==='wall'){ S.wallPts=[]; render(); }
+  if(S.tool==='measure'){ S.pendingMeas=null; render(); }
+});
+
+// drag & drop furniture
+document.querySelectorAll('.fur-item').forEach(el=>{
+  el.addEventListener('dragstart',e=>e.dataTransfer.setData('ftype',el.dataset.ftype));
+});
+area.addEventListener('dragover',e=>e.preventDefault());
+area.addEventListener('drop',e=>{
+  e.preventDefault();
+  const ftype=e.dataTransfer.getData('ftype'); if(!ftype) return;
+  const r=cvs.getBoundingClientRect();
+  const {x:wx,y:wy}=s2w(e.clientX-r.left,e.clientY-r.top);
+  const [fw,fh]=FUR_SIZE[ftype]||[80,60];
+  const o={id:uid(),type:ftype,x:snap(wx-fw/2),y:snap(wy-fh/2),w:fw,h:fh,rotation:0,color:null,label:null};
+  S.objs.push(o); S.sel=o.id; saveHist(); renderProp(); render();
+});
+
+// ═══════════════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key==='y'){ e.preventDefault(); redo(); return; }
+  if(e.key==='Escape'){
+    S.wallPts=[]; S.isDown=false; S.pendingMeas=null;
+    S.sel=null; renderProp(); render(); return;
+  }
+  if(e.key==='Enter'&&S.tool==='wall'&&S.wallPts.length>=2){ commitWall(); return; }
+  if((e.key==='Delete'||e.key==='Backspace')&&S.sel){
+    S.objs=S.objs.filter(o=>o.id!==S.sel); S.sel=null; renderProp(); saveHist(); render(); return;
+  }
+  if(S.sel){
+    const o=getObjById(S.sel); if(!o) return;
+    const step=e.shiftKey?S.gridSize:1;
+    let moved=false;
+    if(e.key==='ArrowLeft'){ if(o.type==='wall'){o.x1-=step;o.x2-=step;}else o.x-=step; moved=true; }
+    if(e.key==='ArrowRight'){ if(o.type==='wall'){o.x1+=step;o.x2+=step;}else o.x+=step; moved=true; }
+    if(e.key==='ArrowUp'){ if(o.type==='wall'){o.y1-=step;o.y2-=step;}else o.y-=step; moved=true; }
+    if(e.key==='ArrowDown'){ if(o.type==='wall'){o.y1+=step;o.y2+=step;}else o.y+=step; moved=true; }
+    if(e.key==='r'){ o.rotation=((o.rotation||0)+15)%360; moved=true; }
+    if(e.key==='R'){ o.rotation=((o.rotation||0)-15+360)%360; moved=true; }
+    if(moved){ e.preventDefault(); saveHist(); render(); renderPropValues(); }
+  }
+});
+
+// ═══════════════════════════════════════════════
+// TOOL BUTTONS
+// ═══════════════════════════════════════════════
+document.querySelectorAll('[data-tool]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    S.tool=btn.dataset.tool;
+    document.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tool-hint').textContent=TOOL_HINTS[S.tool]||'';
+    cvs.style.cursor=S.tool==='pan'?'grab':'crosshair';
+    S.wallPts=[]; S.isDown=false; S.pendingMeas=null; render();
+  });
+});
+
+document.getElementById('btn-undo').addEventListener('click',undo);
+document.getElementById('btn-redo').addEventListener('click',redo);
+
+document.getElementById('btn-grid').addEventListener('click',()=>{
+  S.showGrid=!S.showGrid;
+  document.getElementById('btn-grid').style.opacity=S.showGrid?1:.4;
+  render();
+});
+
+let snapLbl=true;
+document.getElementById('btn-snap').addEventListener('click',()=>{
+  S.snapOn=!S.snapOn; snapLbl=S.snapOn;
+  document.getElementById('btn-snap').textContent='';
+  document.getElementById('btn-snap').innerHTML=`<i class="ti ti-magnet"></i> 스냅${S.snapOn?'ON':'OFF'}`;
+});
+
+document.getElementById('btn-bg-toggle').addEventListener('click',()=>{
+  S.showBg=!S.showBg;
+  document.getElementById('btn-bg-toggle').style.opacity=S.showBg?1:.4;
+  render();
+});
+
+document.getElementById('btn-clear').addEventListener('click',()=>{
+  if(!confirm('모든 요소를 삭제할까요?')) return;
+  S.objs=[]; S.measures=[]; S.sel=null; S.bgImg=null; S.bgSrc=null;
+  document.getElementById('analysis-bar').classList.remove('show');
+  saveHist(); renderProp(); render();
+});
+
+document.getElementById('btn-export').addEventListener('click',()=>{
+  const link=document.createElement('a');
+  link.download='office-layout.png'; link.href=cvs.toDataURL(); link.click();
+});
+
+// ═══════════════════════════════════════════════
+// BACKGROUND IMAGE LOAD
+// ═══════════════════════════════════════════════
+function loadBg(src){
+  S.bgSrc=src;
+  const img=new Image();
+  img.onload=()=>{ S.bgImg=img; render(); };
+  img.src=src;
+}
+
+// ═══════════════════════════════════════════════
+// UPLOAD + AI ANALYSIS
+// ═══════════════════════════════════════════════
+document.getElementById('btn-upload').addEventListener('click',()=>{
+  if(!S.apiKey){ showApiKeyModal(()=>document.getElementById('file-input').click()); return; }
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change',async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  e.target.value='';
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    const src=ev.target.result;
+    loadBg(src);
+    if(S.apiKey) await analyzeFloorPlan(src);
+    else { saveHist(); render(); }
+  };
+  reader.readAsDataURL(file);
+});
+
+async function analyzeFloorPlan(base64src){
+  showLoading(true);
+  const b64=base64src.split(',')[1];
+  const mime=base64src.match(/data:(.*?);/)[1];
+
+  const prompt=`You are an expert floor plan analyzer. Analyze this floor plan image carefully.
+
+Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
+{
+  "totalWidthPx": <estimated total floor plan width in the image pixels>,
+  "totalHeightPx": <estimated total floor plan height in the image pixels>,
+  "rooms": [
+    {"name":"공간이름", "xPct":0.0, "yPct":0.0, "wPct":0.5, "hPct":0.4, "type":"office|meeting|storage|corridor|bathroom|other"}
+  ],
+  "walls": [
+    {"x1Pct":0.0, "y1Pct":0.0, "x2Pct":1.0, "y2Pct":0.0, "isOuter":true}
+  ],
+  "doors": [
+    {"xPct":0.25, "yPct":0.5, "sizePct":0.04, "rotationDeg":0}
+  ],
+  "windows": [
+    {"xPct":0.05, "yPct":0.0, "wPct":0.6, "rotationDeg":0}
+  ]
+}
+
+Rules:
+- All coordinates are percentages (0.0 to 1.0) relative to the floor plan bounding box
+- xPct, yPct = top-left corner of each element
+- wPct, hPct = width and height as percentage of total floor plan
+- For walls: x1Pct,y1Pct = start point, x2Pct,y2Pct = end point
+- Include ALL visible rooms, walls (both outer and inner), doors, and windows
+- Use Korean names for rooms if visible in the image
+- Be precise with coordinates`;
+
+  try {
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':S.apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true',
+      },
+      body:JSON.stringify({
+        model:'claude-opus-4-8',
+        max_tokens:4096,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mime,data:b64}},
+          {type:'text',text:prompt}
+        ]}]
+      })
+    });
+
+    if(!resp.ok){
+      const err=await resp.json();
+      throw new Error(err.error?.message||'API 오류');
+    }
+
+    const data=await resp.json();
+    const text=data.content[0].text.trim();
+    const jsonStr=text.replace(/^```json?\n?/,'').replace(/\n?```$/,'').trim();
+    const parsed=JSON.parse(jsonStr);
+    applyAnalysis(parsed);
+    document.getElementById('analysis-bar').classList.add('show');
+    document.getElementById('analysis-msg').textContent=
+      `도면 분석 완료 — 공간 ${parsed.rooms?.length||0}개, 벽 ${parsed.walls?.length||0}개, 문 ${parsed.doors?.length||0}개 인식됨`;
+    saveHist();
+  } catch(err){
+    showLoading(false);
+    showToast('분석 오류: '+err.message, true);
+    console.error(err);
+  } finally {
+    showLoading(false);
+  }
+}
+
+function applyAnalysis(parsed){
+  // clear existing structure objects (keep furniture)
+  const furTypes=Object.keys(FUR_SIZE);
+  S.objs=S.objs.filter(o=>furTypes.includes(o.type));
+
+  // canvas render size
+  const CW=cvs.width-160, CH=cvs.height-160;
+  const aspect=(parsed.totalWidthPx||1)/(parsed.totalHeightPx||1);
+  let RW=CW, RH=CW/aspect;
+  if(RH>CH){ RH=CH; RW=CH*aspect; }
+
+  // fit zoom/pan
+  S.zoom=RW/(parsed.totalWidthPx||800);
+  S.panX=80; S.panY=80;
+
+  const W=parsed.totalWidthPx||800, H=parsed.totalHeightPx||600;
+
+  // rooms
+  (parsed.rooms||[]).forEach(r=>{
+    const colorMap={office:'rgba(90,140,220,0.13)',meeting:'rgba(80,180,140,0.13)',storage:'rgba(150,120,80,0.13)',corridor:'rgba(140,140,140,0.1)',bathroom:'rgba(80,140,200,0.13)'};
+    S.objs.push({
+      id:uid(),type:'room',
+      x:r.xPct*W, y:r.yPct*H, w:r.wPct*W, h:r.hPct*H,
+      label:r.name||'공간', rotation:0,
+      color:colorMap[r.type]||'rgba(90,140,220,0.13)',
+    });
+  });
+
+  // walls
+  (parsed.walls||[]).forEach(w=>{
+    S.objs.push({
+      id:uid(),type:'wall',
+      x1:w.x1Pct*W, y1:w.y1Pct*H, x2:w.x2Pct*W, y2:w.y2Pct*H,
+      thick:w.isOuter?10:7, color:w.isOuter?'#aabbcc':'#8899bb',
+    });
+  });
+
+  // doors
+  (parsed.doors||[]).forEach(d=>{
+    const sz=(d.sizePct||0.05)*W;
+    S.objs.push({
+      id:uid(),type:'door',
+      x:d.xPct*W, y:d.yPct*H, w:sz, h:sz,
+      rotation:d.rotationDeg||0, color:'#ffaa44',
+    });
+  });
+
+  // windows
+  (parsed.windows||[]).forEach(w=>{
+    const ww=(w.wPct||0.1)*W;
+    S.objs.push({
+      id:uid(),type:'window-t',
+      x:w.xPct*W, y:w.yPct*H, w:ww, h:14,
+      rotation:w.rotationDeg||0, color:'#44aaff',
+    });
+  });
+
+  render();
+}
+
+document.getElementById('btn-reanalyze').addEventListener('click',()=>{
+  if(!S.bgSrc) return;
+  analyzeFloorPlan(S.bgSrc);
+});
+
+// ═══════════════════════════════════════════════
+// PROPERTY PANEL
+// ═══════════════════════════════════════════════
+const SWATCHES=['#4a8fc0','#c07840','#9060b0','#40a080','#40a040','#c04040','#8899bb','#ffaa44','#ff6688','#88ccff','#aabb44','#cc9944'];
+
+function renderProp(){
+  const panel=document.getElementById('prop-panel');
+  const o=getObjById(S.sel);
+  if(!o){ panel.innerHTML='<div class="no-sel">요소를 선택하면<br>속성이 표시됩니다</div>'; return; }
+
+  let html='<div class="prop-group">';
+  html+='<div class="prop-group-title">위치 / 크기</div>';
+
+  if(o.type==='wall'){
+    html+=propRow('X1','p-x1',Math.round(o.x1),'number');
+    html+=propRow('Y1','p-y1',Math.round(o.y1),'number');
+    html+=propRow('X2','p-x2',Math.round(o.x2),'number');
+    html+=propRow('Y2','p-y2',Math.round(o.y2),'number');
+    html+=propRow('두께','p-thick',o.thick||8,'number');
+  } else {
+    html+=propRow('X','p-x',Math.round(o.x),'number');
+    html+=propRow('Y','p-y',Math.round(o.y),'number');
+    html+=propRow('너비','p-w',Math.round(o.w),'number');
+    html+=propRow('높이','p-h',Math.round(o.h),'number');
+    html+=propRow('회전°','p-rot',Math.round(o.rotation||0),'number');
+  }
+  html+='</div>';
+
+  if(o.type==='room'||o.type==='text'){
+    html+='<div class="prop-group">';
+    html+='<div class="prop-group-title">'+(o.type==='text'?'텍스트':'이름')+'</div>';
+    html+=propRow('','p-label',o.label||o.text||'','text');
+    html+='</div>';
+  }
+  if(o.type==='text'){
+    html+='<div class="prop-group">';
+    html+=propRow('크기','p-fs',o.fontSize||14,'number');
+    html+='</div>';
+  }
+
+  html+='<div class="prop-group"><div class="prop-group-title">색상</div>';
+  html+='<div class="color-row" id="cswatches">';
+  SWATCHES.forEach(c=>{ html+=`<div class="cswatch${o.color===c?' sel':''}" style="background:${c}" data-c="${c}"></div>`; });
+  html+='</div></div>';
+  html+=`<button class="del-btn" id="p-delete"><i class="ti ti-trash"></i> 삭제</button>`;
+
+  panel.innerHTML=html;
+
+  // bind events
+  [['p-x','x'],['p-y','y'],['p-w','w'],['p-h','h'],['p-rot','rotation'],
+   ['p-thick','thick'],['p-x1','x1'],['p-y1','y1'],['p-x2','x2'],['p-y2','y2'],
+   ['p-fs','fontSize']].forEach(([pid,key])=>{
+    const el=document.getElementById(pid); if(!el) return;
+    el.addEventListener('change',()=>{ o[key]=parseFloat(el.value); saveHist(); render(); });
+  });
+  const lel=document.getElementById('p-label');
+  if(lel) lel.addEventListener('change',()=>{ if(o.type==='text') o.text=lel.value; else o.label=lel.value; saveHist(); render(); });
+
+  document.querySelectorAll('.cswatch').forEach(sw=>{
+    sw.addEventListener('click',()=>{ o.color=sw.dataset.c; document.querySelectorAll('.cswatch').forEach(s=>s.classList.remove('sel')); sw.classList.add('sel'); saveHist(); render(); });
+  });
+  document.getElementById('p-delete').addEventListener('click',()=>{
+    S.objs=S.objs.filter(x=>x.id!==S.sel); S.sel=null; saveHist(); renderProp(); render();
+  });
+}
+
+function propRow(label,id,value,type){
+  return `<div class="prop-row"><span class="prop-label">${label}</span><input class="prop-input" id="${id}" type="${type}" value="${value}"></div>`;
+}
+
+function renderPropValues(){
+  // quick update without full re-render
+  const o=getObjById(S.sel); if(!o) return;
+  const map=[['p-x','x'],['p-y','y'],['p-w','w'],['p-h','h'],['p-rot','rotation'],
+             ['p-x1','x1'],['p-y1','y1'],['p-x2','x2'],['p-y2','y2']];
+  map.forEach(([pid,key])=>{ const el=document.getElementById(pid); if(el&&o[key]!==undefined) el.value=Math.round(o[key]); });
+}
+
+// ═══════════════════════════════════════════════
+// SAVE / LOAD
+// ═══════════════════════════════════════════════
+document.getElementById('btn-save').addEventListener('click',()=>{
+  const mb=document.getElementById('modal-box');
+  mb.innerHTML=`<h2><i class="ti ti-device-floppy"></i> 저장</h2>
+    <input class="modal-input" id="sname" placeholder="이름" value="레이아웃 ${new Date().toLocaleDateString('ko-KR')}">
+    <div class="modal-btns"><button class="mbtn" id="mc">취소</button><button class="mbtn primary" id="ms">저장</button></div>`;
+  openModal();
+  document.getElementById('mc').onclick=closeModal;
+  document.getElementById('ms').onclick=()=>{
+    const name=document.getElementById('sname').value.trim()||'레이아웃';
+    const saves=JSON.parse(localStorage.getItem('ol-saves')||'[]');
+    saves.unshift({id:Date.now(),name,date:new Date().toLocaleString('ko-KR'),data:{objs:S.objs,bgSrc:S.bgSrc,measures:S.measures}});
+    localStorage.setItem('ol-saves',JSON.stringify(saves.slice(0,20)));
+    closeModal(); showToast('저장됨');
+  };
+});
+
+document.getElementById('btn-load').addEventListener('click',()=>showLoadModal());
+
+function showLoadModal(){
+  const saves=JSON.parse(localStorage.getItem('ol-saves')||'[]');
+  const mb=document.getElementById('modal-box');
+  mb.innerHTML=`<h2><i class="ti ti-folder-open"></i> 불러오기</h2>`+
+    (saves.length?saves.map(s=>`<div class="save-item">
+      <div><div class="si-name">${s.name}</div><div class="si-date">${s.date}</div></div>
+      <div class="si-btns">
+        <button class="si-btn" data-lid="${s.id}">열기</button>
+        <button class="si-btn del" data-did="${s.id}">삭제</button>
+      </div></div>`).join(''):
+    '<div style="color:#446688;font-size:12px;text-align:center;padding:10px">저장된 항목 없음</div>')+
+    `<div class="modal-btns"><button class="mbtn" id="mc">닫기</button></div>`;
+  openModal();
+  document.getElementById('mc').onclick=closeModal;
+  mb.querySelectorAll('[data-lid]').forEach(btn=>{ btn.onclick=()=>{
+    const saves=JSON.parse(localStorage.getItem('ol-saves')||'[]');
+    const e=saves.find(s=>s.id==btn.dataset.lid); if(!e) return;
+    S.objs=e.data.objs||[]; S.measures=e.data.measures||[]; S.sel=null;
+    if(e.data.bgSrc) loadBg(e.data.bgSrc); else{S.bgImg=null;S.bgSrc=null;}
+    saveHist(); renderProp(); render(); closeModal(); showToast('불러옴');
+  };});
+  mb.querySelectorAll('[data-did]').forEach(btn=>{ btn.onclick=()=>{
+    let saves=JSON.parse(localStorage.getItem('ol-saves')||'[]');
+    saves=saves.filter(s=>s.id!=btn.dataset.did);
+    localStorage.setItem('ol-saves',JSON.stringify(saves)); showLoadModal();
+  };});
+}
+
+// ═══════════════════════════════════════════════
+// API KEY MODAL
+// ═══════════════════════════════════════════════
+function updateApiKeyBadge(){
+  const badge=document.getElementById('api-key-badge');
+  if(S.apiKey){ badge.innerHTML='<i class="ti ti-key"></i> API키 설정됨'; badge.className=''; }
+  else { badge.innerHTML='<i class="ti ti-key"></i> API키 없음'; badge.className='missing'; }
+}
+updateApiKeyBadge();
+
+document.getElementById('api-key-badge').addEventListener('click',()=>showApiKeyModal());
+
+function showApiKeyModal(callback){
+  const mb=document.getElementById('modal-box');
+  mb.innerHTML=`<h2><i class="ti ti-key"></i> Claude API 키 설정</h2>
+    <div class="modal-note">도면 자동 분석 기능에 Claude API 키가 필요합니다.<br>
+    <a href="https://console.anthropic.com" target="_blank" style="color:#88aaff">console.anthropic.com</a>에서 발급받을 수 있습니다.<br>
+    키는 브라우저 localStorage에만 저장됩니다.</div>
+    <input class="modal-input" id="ak-input" type="password" placeholder="sk-ant-..." value="${S.apiKey}">
+    <div class="modal-btns">
+      <button class="mbtn" id="ak-cancel">취소</button>
+      <button class="mbtn warn" id="ak-clear" style="background:#3a1010;border-color:#6a2020;color:#f88">삭제</button>
+      <button class="mbtn primary" id="ak-save">저장</button>
+    </div>`;
+  openModal();
+  document.getElementById('ak-cancel').onclick=closeModal;
+  document.getElementById('ak-clear').onclick=()=>{ S.apiKey=''; localStorage.removeItem('claude-api-key'); updateApiKeyBadge(); closeModal(); };
+  document.getElementById('ak-save').onclick=()=>{
+    S.apiKey=document.getElementById('ak-input').value.trim();
+    localStorage.setItem('claude-api-key',S.apiKey);
+    updateApiKeyBadge(); closeModal();
+    if(callback) callback();
+  };
+}
+
+// ═══════════════════════════════════════════════
+// MODAL HELPERS
+// ═══════════════════════════════════════════════
+function openModal(){ document.getElementById('modal-bg').classList.add('open'); }
+function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); }
+document.getElementById('modal-bg').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-bg')) closeModal(); });
+
+function showLoading(on){ document.getElementById('loading-overlay').classList.toggle('show',on); }
+
+function showToast(msg, isErr=false){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText=`position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:${isErr?'#8b1a1a':'#1a5a1a'};border:1px solid ${isErr?'#c03030':'#30a030'};color:${isErr?'#faa':'#afa'};padding:8px 20px;border-radius:20px;font-size:13px;z-index:200;pointer-events:none;max-width:400px;text-align:center`;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+saveHist();
+render();
+</script>
+</body>
+</html>
