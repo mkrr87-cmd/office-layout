@@ -113,6 +113,7 @@ canvas{display:block;cursor:crosshair}
   <button class="tb-btn" id="btn-grid" title="격자 표시"><i class="ti ti-grid-dots"></i></button>
   <button class="tb-btn" id="btn-snap" title="격자 스냅"><i class="ti ti-magnet"></i> 스냅ON</button>
   <button class="tb-btn" id="btn-bg-toggle" title="배경도면 표시"><i class="ti ti-eye"></i> 배경</button>
+  <button class="tb-btn warn" id="btn-del-bg"><i class="ti ti-photo-x"></i> 도면삭제</button>
   <div class="tb-sep"></div>
   <button class="tb-btn warn" id="btn-clear"><i class="ti ti-trash"></i> 전체삭제</button>
   <div style="margin-left:auto"></div>
@@ -768,6 +769,15 @@ document.getElementById('btn-bg-toggle').addEventListener('click',()=>{
   render();
 });
 
+document.getElementById('btn-del-bg').addEventListener('click',()=>{
+  if(!S.bgImg){ showToast('배경 도면이 없습니다'); return; }
+  if(!confirm('배경 도면을 삭제할까요?\n(레이아웃 요소는 유지됩니다)')) return;
+  S.bgImg=null; S.bgSrc=null;
+  document.getElementById('analysis-bar').classList.remove('show');
+  saveHist(); render();
+  showToast('배경 도면이 삭제되었습니다');
+});
+
 document.getElementById('btn-clear').addEventListener('click',()=>{
   if(!confirm('모든 요소를 삭제할까요?')) return;
   S.objs=[]; S.measures=[]; S.sel=null; S.bgImg=null; S.bgSrc=null;
@@ -816,34 +826,68 @@ async function analyzeFloorPlan(base64src){
   const b64=base64src.split(',')[1];
   const mime=base64src.match(/data:(.*?);/)[1];
 
-  const prompt=`You are an expert floor plan analyzer. Analyze this floor plan image carefully.
+  const prompt=`You are an expert architectural floor plan analyzer. Your job is to read this floor plan image VERY carefully and extract ALL dimension numbers and spatial layout with maximum precision.
 
-Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
+STEP 1 — READ ALL DIMENSION ANNOTATIONS
+Carefully read every number annotated with dimension lines in the image. These are the authoritative sizes.
+
+STEP 2 — BUILD A COORDINATE GRID
+Place the origin (0, 0) at the top-left corner of the outermost floor plan boundary.
+Accumulate dimensions left-to-right for X coordinates, top-to-bottom for Y coordinates.
+
+STEP 3 — RETURN JSON
+Return ONLY valid JSON (no markdown, no explanation):
+
 {
-  "totalWidthPx": <estimated total floor plan width in the image pixels>,
-  "totalHeightPx": <estimated total floor plan height in the image pixels>,
+  "unit": "cm",
+  "totalWidth": <sum of all horizontal dimension numbers>,
+  "totalHeight": <sum of all vertical dimension numbers>,
+  "dimensionNotes": "<brief description of dimensions you read, e.g. 'horizontal: 300+800+230+330=1660, vertical: 500+255+380=1135'>",
   "rooms": [
-    {"name":"공간이름", "xPct":0.0, "yPct":0.0, "wPct":0.5, "hPct":0.4, "type":"office|meeting|storage|corridor|bathroom|other"}
+    {
+      "name": "<exact Korean name from drawing>",
+      "x": <left edge X in cm>,
+      "y": <top edge Y in cm>,
+      "w": <width in cm based on dimension annotations>,
+      "h": <height in cm based on dimension annotations>,
+      "type": "office|meeting|storage|corridor|bathroom|entrance|other"
+    }
   ],
   "walls": [
-    {"x1Pct":0.0, "y1Pct":0.0, "x2Pct":1.0, "y2Pct":0.0, "isOuter":true}
+    {
+      "x1": <start X in cm>, "y1": <start Y in cm>,
+      "x2": <end X in cm>,   "y2": <end Y in cm>,
+      "isOuter": true,
+      "thickness": 15
+    }
   ],
   "doors": [
-    {"xPct":0.25, "yPct":0.5, "sizePct":0.04, "rotationDeg":0}
+    {
+      "x": <left edge X in cm>,
+      "y": <top edge Y in cm>,
+      "width": <door opening width in cm, default 90>,
+      "rotation": <0=opens right, 90=opens down, 180=opens left, 270=opens up>
+    }
   ],
   "windows": [
-    {"xPct":0.05, "yPct":0.0, "wPct":0.6, "rotationDeg":0}
+    {
+      "x": <left edge X in cm>,
+      "y": <top edge Y in cm>,
+      "width": <window width in cm>,
+      "onWall": "top|bottom|left|right"
+    }
   ]
 }
 
-Rules:
-- All coordinates are percentages (0.0 to 1.0) relative to the floor plan bounding box
-- xPct, yPct = top-left corner of each element
-- wPct, hPct = width and height as percentage of total floor plan
-- For walls: x1Pct,y1Pct = start point, x2Pct,y2Pct = end point
-- Include ALL visible rooms, walls (both outer and inner), doors, and windows
-- Use Korean names for rooms if visible in the image
-- Be precise with coordinates`;
+CRITICAL RULES:
+- Use ONLY the actual dimension numbers visible in the drawing — do NOT estimate
+- Every room x,y,w,h must be derivable from the dimension annotations
+- Outer walls form the complete boundary rectangle
+- Inner walls divide the interior
+- All coordinates must be consistent (rooms should not overlap)
+- Include every labeled space (방1, 방2, 방3, 사무실1, 사무실2, 화장실, 창고, 대회의실, 소회의실, 입구, 통로 etc.)`;
+
+  document.getElementById('loading-msg').textContent='Claude AI가 도면 치수를 정밀 분석 중...\n잠시만 기다려 주세요';
 
   try {
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
@@ -873,10 +917,12 @@ Rules:
     const text=data.content[0].text.trim();
     const jsonStr=text.replace(/^```json?\n?/,'').replace(/\n?```$/,'').trim();
     const parsed=JSON.parse(jsonStr);
+    console.log('분석 결과:', parsed);
     applyAnalysis(parsed);
     document.getElementById('analysis-bar').classList.add('show');
+    const dimNote = parsed.dimensionNotes ? ` (${parsed.dimensionNotes})` : '';
     document.getElementById('analysis-msg').textContent=
-      `도면 분석 완료 — 공간 ${parsed.rooms?.length||0}개, 벽 ${parsed.walls?.length||0}개, 문 ${parsed.doors?.length||0}개 인식됨`;
+      `분석 완료 — 공간 ${parsed.rooms?.length||0}개 · 벽 ${parsed.walls?.length||0}개 · 문 ${parsed.doors?.length||0}개 · ${parsed.totalWidth||'?'}×${parsed.totalHeight||'?'}${parsed.unit||'cm'}${dimNote}`;
     saveHist();
   } catch(err){
     showLoading(false);
@@ -892,55 +938,72 @@ function applyAnalysis(parsed){
   const furTypes=Object.keys(FUR_SIZE);
   S.objs=S.objs.filter(o=>furTypes.includes(o.type));
 
-  // canvas render size
-  const CW=cvs.width-160, CH=cvs.height-160;
-  const aspect=(parsed.totalWidthPx||1)/(parsed.totalHeightPx||1);
-  let RW=CW, RH=CW/aspect;
-  if(RH>CH){ RH=CH; RW=CH*aspect; }
+  // actual dimensions in cm (or whatever unit)
+  const TW=parsed.totalWidth||1000;
+  const TH=parsed.totalHeight||800;
 
-  // fit zoom/pan
-  S.zoom=RW/(parsed.totalWidthPx||800);
-  S.panX=80; S.panY=80;
+  // fit to canvas with padding
+  const PAD=80;
+  const CW=cvs.width-PAD*2, CH=cvs.height-PAD*2;
+  const scaleX=CW/TW, scaleY=CH/TH;
+  const scale=Math.min(scaleX,scaleY);
 
-  const W=parsed.totalWidthPx||800, H=parsed.totalHeightPx||600;
+  // world coords ARE the cm values; zoom maps cm→px
+  S.zoom=scale;
+  S.panX=PAD;
+  S.panY=PAD;
 
-  // rooms
+  const colorMap={
+    office:'rgba(90,140,220,0.15)',
+    meeting:'rgba(80,180,140,0.15)',
+    storage:'rgba(150,120,80,0.15)',
+    corridor:'rgba(160,160,160,0.1)',
+    bathroom:'rgba(60,120,200,0.15)',
+    entrance:'rgba(200,160,60,0.15)',
+    other:'rgba(120,120,180,0.1)',
+  };
+
+  // rooms — coordinates already in cm
   (parsed.rooms||[]).forEach(r=>{
-    const colorMap={office:'rgba(90,140,220,0.13)',meeting:'rgba(80,180,140,0.13)',storage:'rgba(150,120,80,0.13)',corridor:'rgba(140,140,140,0.1)',bathroom:'rgba(80,140,200,0.13)'};
     S.objs.push({
-      id:uid(),type:'room',
-      x:r.xPct*W, y:r.yPct*H, w:r.wPct*W, h:r.hPct*H,
+      id:uid(), type:'room',
+      x:r.x, y:r.y, w:r.w, h:r.h,
       label:r.name||'공간', rotation:0,
-      color:colorMap[r.type]||'rgba(90,140,220,0.13)',
+      color:colorMap[r.type]||colorMap.office,
     });
   });
 
-  // walls
+  // walls — coordinates already in cm
   (parsed.walls||[]).forEach(w=>{
+    const thick=w.thickness||15;
     S.objs.push({
-      id:uid(),type:'wall',
-      x1:w.x1Pct*W, y1:w.y1Pct*H, x2:w.x2Pct*W, y2:w.y2Pct*H,
-      thick:w.isOuter?10:7, color:w.isOuter?'#aabbcc':'#8899bb',
+      id:uid(), type:'wall',
+      x1:w.x1, y1:w.y1, x2:w.x2, y2:w.y2,
+      thick: w.isOuter ? thick : Math.max(8, thick*0.7),
+      color: w.isOuter ? '#b0bfd0' : '#8899bb',
     });
   });
 
   // doors
   (parsed.doors||[]).forEach(d=>{
-    const sz=(d.sizePct||0.05)*W;
+    const dw=d.width||90;
     S.objs.push({
-      id:uid(),type:'door',
-      x:d.xPct*W, y:d.yPct*H, w:sz, h:sz,
-      rotation:d.rotationDeg||0, color:'#ffaa44',
+      id:uid(), type:'door',
+      x:d.x, y:d.y, w:dw, h:dw,
+      rotation:d.rotation||0, color:'#ffaa44',
     });
   });
 
   // windows
   (parsed.windows||[]).forEach(w=>{
-    const ww=(w.wPct||0.1)*W;
+    const ww=w.width||120;
+    const isHoriz=(w.onWall==='top'||w.onWall==='bottom');
     S.objs.push({
-      id:uid(),type:'window-t',
-      x:w.xPct*W, y:w.yPct*H, w:ww, h:14,
-      rotation:w.rotationDeg||0, color:'#44aaff',
+      id:uid(), type:'window-t',
+      x:w.x, y:w.y,
+      w: isHoriz ? ww : 15,
+      h: isHoriz ? 15 : ww,
+      rotation:0, color:'#44aaff',
     });
   });
 
