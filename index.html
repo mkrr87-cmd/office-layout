@@ -39,6 +39,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .fur-item:hover{background:#333366}
 .fur-item:active{cursor:grabbing}
 .fur-item i{font-size:15px;flex-shrink:0}
+.sb-wide{width:100%;background:#1e3a4a;border:1px solid #2a5a6a;color:#7cf;padding:7px;border-radius:5px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:5px;transition:background .12s}
+.sb-wide:hover{background:#2a4f63}
+.sb-wide i{font-size:15px}
+.snap-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px}
+.snap-sel{background:#1e1e36;border:1px solid #3a3a6a;color:#dde;padding:3px 6px;border-radius:4px;font-size:11px;flex:1}
 
 /* ── property panel ── */
 #prop-panel{flex:1;padding:7px;overflow-y:auto}
@@ -112,6 +117,8 @@ canvas{display:block;cursor:crosshair}
   <div class="tb-sep"></div>
   <button class="tb-btn" id="btn-grid" title="격자 표시"><i class="ti ti-grid-dots"></i></button>
   <button class="tb-btn" id="btn-snap" title="격자 스냅"><i class="ti ti-magnet"></i> 스냅ON</button>
+  <button class="tb-btn" id="btn-ruler" title="눈금자"><i class="ti ti-ruler-2"></i> 눈금자</button>
+  <button class="tb-btn" id="btn-dims" title="치수 표시"><i class="ti ti-dimensions"></i> 치수</button>
   <button class="tb-btn" id="btn-bg-toggle" title="배경도면 표시"><i class="ti ti-eye"></i> 배경</button>
   <button class="tb-btn warn" id="btn-del-bg"><i class="ti ti-photo-x"></i> 도면삭제</button>
   <div class="tb-sep"></div>
@@ -141,6 +148,22 @@ canvas{display:block;cursor:crosshair}
         <button class="tool-btn" data-tool="measure"><i class="ti ti-ruler"></i><span>치수</span></button>
       </div>
       <div id="tool-hint" class="tool-hint" style="margin-top:5px">클릭으로 요소 선택</div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-title">정밀 입력 (cm)</div>
+      <button class="sb-wide" id="btn-add-room-dim"><i class="ti ti-ruler-measure"></i> 치수로 공간 만들기</button>
+      <button class="sb-wide" id="btn-calib"><i class="ti ti-focus-centered"></i> 배경 도면 축척 보정</button>
+      <div class="snap-row">
+        <span style="font-size:10px;color:#667799">스냅 간격</span>
+        <select id="snap-sel" class="snap-sel">
+          <option value="1">1cm</option>
+          <option value="5">5cm</option>
+          <option value="10" selected>10cm</option>
+          <option value="25">25cm</option>
+          <option value="50">50cm</option>
+        </select>
+      </div>
     </div>
 
     <div class="sb-section">
@@ -191,9 +214,11 @@ const area = document.getElementById('canvas-area');
 
 const S = {
   tool: 'select',
-  zoom: 1, panX: 80, panY: 80,
+  zoom: 0.35, panX: 90, panY: 90,
   showGrid: true, snapOn: true, showBg: true,
-  gridSize: 20,
+  showDims: true, showRuler: true,
+  gridSize: 10,          // 1 world unit = 1 cm, snap grid = 10cm
+  bgCmPerPx: 1,          // background image: cm per image-pixel (calibration)
   objs: [],          // all drawn objects
   sel: null,         // selected object (id)
   bgImg: null, bgSrc: null,
@@ -221,6 +246,7 @@ const TOOL_HINTS = {
   'window-t':'드래그로 창문 그리기',
   text:'클릭 후 텍스트 입력',
   measure:'클릭: 시작점 | 다시 클릭: 끝점 | ESC: 취소',
+  calib:'도면에서 길이를 아는 두 점 클릭',
 };
 
 const FUR_SIZE = {
@@ -257,13 +283,19 @@ resize();
 function s2w(sx,sy){ return {x:(sx-S.panX)/S.zoom, y:(sy-S.panY)/S.zoom}; }
 function w2s(wx,wy){ return {x:wx*S.zoom+S.panX, y:wy*S.zoom+S.panY}; }
 function snap(v){ return S.snapOn ? Math.round(v/S.gridSize)*S.gridSize : v; }
+// 1 world unit = 1 cm. Format a cm length nicely.
+function fmtLen(cm){
+  cm=Math.round(cm);
+  if(cm>=100){ const m=cm/100; return (Number.isInteger(m)?m:m.toFixed(2).replace(/0+$/,'').replace(/\.$/,''))+'m'; }
+  return cm+'cm';
+}
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 
 // ═══════════════════════════════════════════════
 // HISTORY
 // ═══════════════════════════════════════════════
 function saveHist(){
-  const snap = JSON.stringify({objs:S.objs, bgSrc:S.bgSrc, measures:S.measures});
+  const snap = JSON.stringify({objs:S.objs, bgSrc:S.bgSrc, measures:S.measures, bgCmPerPx:S.bgCmPerPx});
   S.history = S.history.slice(0, S.hIdx+1);
   S.history.push(snap);
   if(S.history.length>60) S.history.shift();
@@ -274,6 +306,7 @@ function redo(){ if(S.hIdx>=S.history.length-1) return; S.hIdx++; restoreHist(S.
 function restoreHist(snap){
   const d = JSON.parse(snap);
   S.objs = d.objs; S.measures = d.measures||[];
+  if(d.bgCmPerPx) S.bgCmPerPx=d.bgCmPerPx;
   if(d.bgSrc && d.bgSrc!==S.bgSrc) loadBg(d.bgSrc);
   else if(!d.bgSrc){ S.bgImg=null; S.bgSrc=null; }
   S.sel=null; renderProp(); render();
@@ -287,23 +320,27 @@ function render(){
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle='#0a0a18'; ctx.fillRect(0,0,W,H);
 
-  // grid
+  // grid — minor = 10cm, major = 1m (100cm)
   if(S.showGrid){
-    const gs=S.gridSize*S.zoom;
-    const ox=((S.panX%gs)+gs)%gs, oy=((S.panY%gs)+gs)%gs;
-    ctx.strokeStyle='rgba(255,255,255,0.035)'; ctx.lineWidth=.5;
-    for(let x=ox;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for(let y=oy;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-    const gb=gs*5, ob=((S.panX%gb)+gb)%gb, ob2=((S.panY%gb)+gb)%gb;
-    ctx.strokeStyle='rgba(255,255,255,0.07)';
+    const gs=S.gridSize*S.zoom;                 // 10cm in px
+    if(gs>3){
+      const ox=((S.panX%gs)+gs)%gs, oy=((S.panY%gs)+gs)%gs;
+      ctx.strokeStyle='rgba(255,255,255,0.035)'; ctx.lineWidth=.5;
+      for(let x=ox;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+      for(let y=oy;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    }
+    const gb=100*S.zoom;                         // 1m in px
+    const ob=((S.panX%gb)+gb)%gb, ob2=((S.panY%gb)+gb)%gb;
+    ctx.strokeStyle='rgba(120,160,220,0.13)'; ctx.lineWidth=.7;
     for(let x=ob;x<W;x+=gb){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
     for(let y=ob2;y<H;y+=gb){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   }
 
-  // bg image
+  // bg image (scaled by calibration: cm-per-pixel)
   if(S.bgImg && S.showBg){
-    ctx.save(); ctx.globalAlpha=.35;
-    ctx.drawImage(S.bgImg, S.panX, S.panY, S.bgImg.width*S.zoom, S.bgImg.height*S.zoom);
+    ctx.save(); ctx.globalAlpha=.38;
+    const bw=S.bgImg.width*S.bgCmPerPx*S.zoom, bh=S.bgImg.height*S.bgCmPerPx*S.zoom;
+    ctx.drawImage(S.bgImg, S.panX, S.panY, bw, bh);
     ctx.restore();
   }
 
@@ -335,15 +372,15 @@ function render(){
   }
 
   // measure in-progress
-  if(S.tool==='measure' && S.pendingMeas){
+  if((S.tool==='measure'||S.tool==='calib') && S.pendingMeas){
     const a=w2s(S.pendingMeas.x,S.pendingMeas.y), b=w2s(S.curWx,S.curWy);
     const dx=S.curWx-S.pendingMeas.x, dy=S.curWy-S.pendingMeas.y;
-    const dist=Math.round(Math.sqrt(dx*dx+dy*dy));
+    const dist=Math.sqrt(dx*dx+dy*dy);
     ctx.save(); ctx.strokeStyle='#ffff55'; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle='#ffff55'; ctx.font='12px sans-serif'; ctx.textAlign='center';
-    ctx.fillText(dist+'px', (a.x+b.x)/2, (a.y+b.y)/2-8);
+    ctx.fillText(fmtLen(dist), (a.x+b.x)/2, (a.y+b.y)/2-8);
     ctx.restore();
   }
 
@@ -351,14 +388,62 @@ function render(){
   S.measures.forEach(m=>{
     const a=w2s(m.x1,m.y1), b=w2s(m.x2,m.y2);
     const dx=m.x2-m.x1, dy=m.y2-m.y1;
-    const dist=Math.round(Math.sqrt(dx*dx+dy*dy));
+    const dist=Math.sqrt(dx*dx+dy*dy);
     ctx.save(); ctx.strokeStyle='rgba(255,255,80,.5)'; ctx.lineWidth=1; ctx.setLineDash([5,3]);
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle='rgba(255,255,80,.8)'; ctx.font='11px sans-serif'; ctx.textAlign='center';
-    ctx.fillText(dist+'px', (a.x+b.x)/2, (a.y+b.y)/2-7);
+    ctx.fillStyle='rgba(255,255,80,.85)'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(fmtLen(dist), (a.x+b.x)/2, (a.y+b.y)/2-7);
     ctx.restore();
   });
+
+  // rulers (cm/m) on top + left edges
+  if(S.showRuler) drawRulers(W,H);
+}
+
+// ─── rulers ───
+function drawRulers(W,H){
+  const RB=18;                      // ruler band thickness
+  // choose tick interval so labels are readable (target ~70px apart)
+  const targets=[10,20,50,100,200,500,1000,2000,5000];
+  let step=100;
+  for(const t of targets){ if(t*S.zoom>=60){ step=t; break; } step=t; }
+  ctx.save();
+  // bands
+  ctx.fillStyle='rgba(18,20,34,0.92)';
+  ctx.fillRect(0,0,W,RB); ctx.fillRect(0,0,RB,H);
+  ctx.strokeStyle='rgba(120,140,180,0.25)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,RB+.5); ctx.lineTo(W,RB+.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(RB+.5,0); ctx.lineTo(RB+.5,H); ctx.stroke();
+  ctx.fillStyle='rgba(150,180,220,0.85)'; ctx.font='9px sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  // horizontal ticks
+  const startX=Math.floor((-S.panX/S.zoom)/step)*step;
+  for(let cm=startX; ; cm+=step){
+    const sx=cm*S.zoom+S.panX;
+    if(sx>W) break;
+    if(sx<RB) continue;
+    ctx.strokeStyle='rgba(120,140,180,0.4)';
+    ctx.beginPath(); ctx.moveTo(sx,RB-5); ctx.lineTo(sx,RB); ctx.stroke();
+    if(cm!==0||true) ctx.fillText(fmtLen(cm), sx+2, 3);
+  }
+  // vertical ticks
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  const startY=Math.floor((-S.panY/S.zoom)/step)*step;
+  for(let cm=startY; ; cm+=step){
+    const sy=cm*S.zoom+S.panY;
+    if(sy>H) break;
+    if(sy<RB) continue;
+    ctx.strokeStyle='rgba(120,140,180,0.4)';
+    ctx.beginPath(); ctx.moveTo(RB-5,sy); ctx.lineTo(RB,sy); ctx.stroke();
+    ctx.save(); ctx.translate(3,sy+2); ctx.fillText(fmtLen(cm),0,0); ctx.restore();
+  }
+  // corner
+  ctx.fillStyle='rgba(18,20,34,0.95)'; ctx.fillRect(0,0,RB,RB);
+  ctx.fillStyle='rgba(150,180,220,0.6)'; ctx.font='8px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('cm',RB/2,RB/2);
+  ctx.restore();
 }
 
 // ─── draw single object ───
@@ -381,10 +466,15 @@ function drawObj(o){
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.rect(sx,sy,sw,sh); ctx.fill(); ctx.stroke();
     if(o.label){
-      ctx.fillStyle='rgba(140,190,255,0.9)';
-      ctx.font=`${Math.max(9,13*S.zoom)}px sans-serif`;
+      ctx.fillStyle='rgba(160,200,255,0.95)';
+      ctx.font=`${Math.max(10,Math.min(18,14*S.zoom))}px sans-serif`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(o.label, sx+sw/2, sy+sh/2);
+      ctx.fillText(o.label, sx+sw/2, sy+sh/2 - (S.showDims?7:0));
+    }
+    if(S.showDims && sw>40 && sh>26){
+      ctx.fillStyle='rgba(150,170,210,0.8)';
+      ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(`${fmtLen(o.w)} × ${fmtLen(o.h)}`, sx+sw/2, sy+sh/2+9);
     }
     if(sel) drawSelBox(sx,sy,sw,sh);
   }
@@ -469,11 +559,14 @@ function drawFurniture(o, sel){
   }
 
   const label = o.label || FUR_LABEL[o.type] || o.type;
-  const fs = Math.max(7, Math.min(11, sw/7)) * S.zoom;
-  if(fs>5){
-    ctx.fillStyle=color; ctx.font=`${fs}px sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(label, sw/2, sh/2);
+  const showD = S.showDims && sw>34 && sh>22;
+  const fs = Math.max(8, Math.min(13, sw/7));
+  ctx.fillStyle=color; ctx.font=`${fs}px sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label, sw/2, sh/2 - (showD?6:0));
+  if(showD){
+    ctx.fillStyle=color+'cc'; ctx.font='10px sans-serif';
+    ctx.fillText(`${Math.round(o.w)}×${Math.round(o.h)}`, sw/2, sh/2+7);
   }
   if(sel){ ctx.strokeStyle='#e94560'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.strokeRect(-3,-3,sw+6,sh+6); ctx.setLineDash([]); }
   ctx.restore();
@@ -553,6 +646,18 @@ cvs.addEventListener('mousedown', e=>{
     render(); return;
   }
 
+  if(S.tool==='calib'){
+    if(!S.pendingMeas){ S.pendingMeas={x:swx,y:swy}; render(); }
+    else {
+      const dx=swx-S.pendingMeas.x, dy=swy-S.pendingMeas.y;
+      const dWorld=Math.sqrt(dx*dx+dy*dy);
+      S.pendingMeas=null; render();
+      if(dWorld<1){ showToast('두 점이 너무 가깝습니다'); return; }
+      doCalibInput(dWorld);
+    }
+    return;
+  }
+
   if(S.tool==='text'){
     const text=prompt('텍스트를 입력하세요:','공간 이름');
     if(text){
@@ -595,7 +700,7 @@ cvs.addEventListener('mousemove', e=>{
   const sx=e.clientX-r.left, sy=e.clientY-r.top;
   const {x:wx,y:wy}=s2w(sx,sy);
   S.curWx=snap(wx); S.curWy=snap(wy);
-  document.getElementById('hud-coords').textContent=`X:${Math.round(wx)} Y:${Math.round(wy)}`;
+  document.getElementById('hud-coords').textContent=`X: ${fmtLen(wx)}  Y: ${fmtLen(wy)}`;
 
   if(S.isPan){
     S.panX=e.clientX-S.panSx; S.panY=e.clientY-S.panSy;
@@ -763,11 +868,92 @@ document.getElementById('btn-snap').addEventListener('click',()=>{
   document.getElementById('btn-snap').innerHTML=`<i class="ti ti-magnet"></i> 스냅${S.snapOn?'ON':'OFF'}`;
 });
 
+document.getElementById('btn-ruler').addEventListener('click',()=>{
+  S.showRuler=!S.showRuler;
+  document.getElementById('btn-ruler').style.opacity=S.showRuler?1:.4;
+  render();
+});
+
+document.getElementById('btn-dims').addEventListener('click',()=>{
+  S.showDims=!S.showDims;
+  document.getElementById('btn-dims').style.opacity=S.showDims?1:.4;
+  render();
+});
+
+document.getElementById('snap-sel').addEventListener('change',e=>{
+  S.gridSize=parseFloat(e.target.value);
+});
+
 document.getElementById('btn-bg-toggle').addEventListener('click',()=>{
   S.showBg=!S.showBg;
   document.getElementById('btn-bg-toggle').style.opacity=S.showBg?1:.4;
   render();
 });
+
+// ─── 치수로 공간 만들기 ───
+document.getElementById('btn-add-room-dim').addEventListener('click',()=>{
+  const mb=document.getElementById('modal-box');
+  mb.innerHTML=`<h2><i class="ti ti-ruler-measure"></i> 치수로 공간 만들기</h2>
+    <div class="modal-note">실제 치수를 cm 단위로 입력하세요. 화면 중앙에 정확한 크기로 생성됩니다.</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><label style="font-size:11px;color:#88a">이름</label>
+        <input class="modal-input" id="rd-name" value="사무실" style="margin-bottom:0"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><label style="font-size:11px;color:#88a">가로 (cm)</label>
+        <input class="modal-input" id="rd-w" type="number" value="500" style="margin-bottom:0"></div>
+      <div style="flex:1"><label style="font-size:11px;color:#88a">세로 (cm)</label>
+        <input class="modal-input" id="rd-h" type="number" value="400" style="margin-bottom:0"></div>
+    </div>
+    <div class="modal-btns"><button class="mbtn" id="rd-cancel">취소</button>
+      <button class="mbtn primary" id="rd-ok">만들기</button></div>`;
+  openModal();
+  document.getElementById('rd-cancel').onclick=closeModal;
+  document.getElementById('rd-ok').onclick=()=>{
+    const name=document.getElementById('rd-name').value.trim()||'공간';
+    const w=Math.max(10,parseFloat(document.getElementById('rd-w').value)||100);
+    const h=Math.max(10,parseFloat(document.getElementById('rd-h').value)||100);
+    const c=s2w(cvs.width/2,cvs.height/2);
+    const o={id:uid(),type:'room',x:snap(c.x-w/2),y:snap(c.y-h/2),w,h,label:name,rotation:0,color:'rgba(90,140,220,0.15)'};
+    S.objs.push(o); S.sel=o.id; saveHist(); renderProp(); render(); closeModal();
+    showToast(`'${name}' ${fmtLen(w)}×${fmtLen(h)} 생성됨`);
+  };
+});
+
+// ─── 배경 도면 축척 보정 ───
+document.getElementById('btn-calib').addEventListener('click',()=>{
+  if(!S.bgImg){ showToast('먼저 배경 도면을 업로드하세요'); return; }
+  S.tool='calib'; S.pendingMeas=null;
+  document.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tool-hint').textContent='보정: 도면에서 길이를 아는 두 점을 클릭하세요';
+  cvs.style.cursor='crosshair';
+  showToast('도면에서 실제 길이를 아는 두 지점을 클릭하세요');
+});
+
+function doCalibInput(dWorld){
+  const mb=document.getElementById('modal-box');
+  mb.innerHTML=`<h2><i class="ti ti-focus-centered"></i> 축척 보정</h2>
+    <div class="modal-note">방금 클릭한 두 지점의 <b>실제 거리</b>를 입력하면, 도면 전체 축척이 자동으로 맞춰집니다.<br>(예: 도면의 벽 한 면이 실제 800cm라면 800 입력)</div>
+    <label style="font-size:11px;color:#88a">실제 거리 (cm)</label>
+    <input class="modal-input" id="cal-cm" type="number" value="${Math.round(dWorld)}" autofocus>
+    <div class="modal-btns"><button class="mbtn" id="cal-cancel">취소</button>
+      <button class="mbtn primary" id="cal-ok">보정 적용</button></div>`;
+  openModal();
+  const ok=()=>{
+    const realCm=parseFloat(document.getElementById('cal-cm').value);
+    if(!realCm||realCm<=0){ showToast('올바른 값을 입력하세요'); return; }
+    const k=realCm/dWorld;
+    S.bgCmPerPx*=k;
+    closeModal(); saveHist(); render();
+    showToast(`축척 보정 완료 — 이제 도면이 실측 cm와 일치합니다`);
+    S.tool='select';
+    document.querySelectorAll('[data-tool]').forEach(b=>b.classList.remove('active'));
+    document.querySelector('[data-tool="select"]').classList.add('active');
+  };
+  document.getElementById('cal-cancel').onclick=closeModal;
+  document.getElementById('cal-ok').onclick=ok;
+  setTimeout(()=>{ const el=document.getElementById('cal-cm'); el&&el.select(); },50);
+}
 
 document.getElementById('btn-del-bg').addEventListener('click',()=>{
   if(!S.bgImg){ showToast('배경 도면이 없습니다'); return; }
@@ -814,9 +1000,13 @@ document.getElementById('file-input').addEventListener('change',async e=>{
   const reader=new FileReader();
   reader.onload=async ev=>{
     const src=ev.target.result;
+    S.bgCmPerPx=1;          // reset calibration for new image
     loadBg(src);
     if(S.apiKey) await analyzeFloorPlan(src);
-    else { saveHist(); render(); }
+    else {
+      saveHist(); render();
+      showToast('도면 업로드됨 — \'축척 보정\'으로 실측 cm를 맞추세요');
+    }
   };
   reader.readAsDataURL(file);
 });
@@ -953,6 +1143,9 @@ function applyAnalysis(parsed){
   S.panX=PAD;
   S.panY=PAD;
 
+  // align background image to the analyzed cm coordinate system
+  if(S.bgImg && S.bgImg.width){ S.bgCmPerPx = TW / S.bgImg.width; }
+
   const colorMap={
     office:'rgba(90,140,220,0.15)',
     meeting:'rgba(80,180,140,0.15)',
@@ -1026,20 +1219,23 @@ function renderProp(){
   if(!o){ panel.innerHTML='<div class="no-sel">요소를 선택하면<br>속성이 표시됩니다</div>'; return; }
 
   let html='<div class="prop-group">';
-  html+='<div class="prop-group-title">위치 / 크기</div>';
+  html+='<div class="prop-group-title">위치 / 크기 (cm)</div>';
 
   if(o.type==='wall'){
-    html+=propRow('X1','p-x1',Math.round(o.x1),'number');
-    html+=propRow('Y1','p-y1',Math.round(o.y1),'number');
-    html+=propRow('X2','p-x2',Math.round(o.x2),'number');
-    html+=propRow('Y2','p-y2',Math.round(o.y2),'number');
+    html+=propRow('시작 X','p-x1',Math.round(o.x1),'number');
+    html+=propRow('시작 Y','p-y1',Math.round(o.y1),'number');
+    html+=propRow('끝 X','p-x2',Math.round(o.x2),'number');
+    html+=propRow('끝 Y','p-y2',Math.round(o.y2),'number');
     html+=propRow('두께','p-thick',o.thick||8,'number');
+    const wl=Math.round(Math.hypot(o.x2-o.x1,o.y2-o.y1));
+    html+=`<div style="font-size:11px;color:#7c9;padding:2px 4px">길이: ${fmtLen(wl)}</div>`;
   } else {
     html+=propRow('X','p-x',Math.round(o.x),'number');
     html+=propRow('Y','p-y',Math.round(o.y),'number');
-    html+=propRow('너비','p-w',Math.round(o.w),'number');
-    html+=propRow('높이','p-h',Math.round(o.h),'number');
+    html+=propRow('가로','p-w',Math.round(o.w),'number');
+    html+=propRow('세로','p-h',Math.round(o.h),'number');
     html+=propRow('회전°','p-rot',Math.round(o.rotation||0),'number');
+    html+=`<div style="font-size:11px;color:#7c9;padding:2px 4px">크기: ${fmtLen(o.w)} × ${fmtLen(o.h)}</div>`;
   }
   html+='</div>';
 
@@ -1106,7 +1302,7 @@ document.getElementById('btn-save').addEventListener('click',()=>{
   document.getElementById('ms').onclick=()=>{
     const name=document.getElementById('sname').value.trim()||'레이아웃';
     const saves=JSON.parse(localStorage.getItem('ol-saves')||'[]');
-    saves.unshift({id:Date.now(),name,date:new Date().toLocaleString('ko-KR'),data:{objs:S.objs,bgSrc:S.bgSrc,measures:S.measures}});
+    saves.unshift({id:Date.now(),name,date:new Date().toLocaleString('ko-KR'),data:{objs:S.objs,bgSrc:S.bgSrc,measures:S.measures,bgCmPerPx:S.bgCmPerPx}});
     localStorage.setItem('ol-saves',JSON.stringify(saves.slice(0,20)));
     closeModal(); showToast('저장됨');
   };
@@ -1132,6 +1328,7 @@ function showLoadModal(){
     const saves=JSON.parse(localStorage.getItem('ol-saves')||'[]');
     const e=saves.find(s=>s.id==btn.dataset.lid); if(!e) return;
     S.objs=e.data.objs||[]; S.measures=e.data.measures||[]; S.sel=null;
+    S.bgCmPerPx=e.data.bgCmPerPx||1;
     if(e.data.bgSrc) loadBg(e.data.bgSrc); else{S.bgImg=null;S.bgSrc=null;}
     saveHist(); renderProp(); render(); closeModal(); showToast('불러옴');
   };});
